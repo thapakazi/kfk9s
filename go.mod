@@ -5,6 +5,7 @@ go 1.22.4
 require (
 	github.com/IBM/sarama v1.43.2
 	github.com/Shopify/sarama v1.38.1
+	github.com/gdamore/tcell/v2 v2.7.1
 	github.com/rivo/tview v0.0.0-20240524063012-037df494fb76
 	github.com/spf13/cobra v1.8.1
 )
@@ -15,7 +16,6 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
-	github.com/gdamore/tcell/v2 v2.7.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
