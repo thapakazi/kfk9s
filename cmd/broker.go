@@ -1,4 +1,3 @@
-// cmd/broker.go
 package cmd
 
 import (
