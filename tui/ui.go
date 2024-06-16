@@ -7,6 +7,7 @@ import (
 	"github.com/rivo/tview"
 	"log"
 	"strconv"
+	"strings"
 )
 
 func StartUI() {
@@ -159,6 +160,14 @@ func displayTopics(app *tview.Application, brokerAddress string) {
 			}
 			return nil
 		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'y' {
+			row, _ := table.GetSelection()
+			if row > 0 {
+				topic := table.GetCell(row, 0).Text
+				displayTopicConfig(app, brokerAddress, topic)
+			}
+			return nil
+		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'q' {
 			displayBrokerStatus(app, brokerAddress)
 			return nil
@@ -231,5 +240,111 @@ func displayMessages(app *tview.Application, brokerAddress, topic string) {
 	// Display the table
 	if err := app.SetRoot(table, true).Run(); err != nil {
 		panic(err)
+	}
+}
+
+func displayTopicConfig(app *tview.Application, brokerAddress, topic string) {
+	table := tview.NewTable().
+		SetFixed(1, 1).
+		SetSelectable(true, false)
+
+	// Set header row for topic config
+	headers := []string{"CONFIG NAME", "VALUE"}
+	for i, header := range headers {
+		cell := tview.NewTableCell(header).
+			SetTextColor(tview.Styles.SecondaryTextColor).
+			SetAlign(tview.AlignCenter).
+			SetSelectable(false)
+		table.SetCell(0, i, cell)
+	}
+
+	// Fetch topic configuration
+	brokers := []string{brokerAddress}
+	config := sarama.NewConfig()
+	client, err := sarama.NewClient(brokers, config)
+	if err != nil {
+		log.Printf("Error creating Kafka client: %v\n", err)
+		table.SetCell(1, 0, tview.NewTableCell("error").SetAlign(tview.AlignCenter))
+	} else {
+		defer client.Close()
+		broker := client.Brokers()[0]
+		if err := broker.Open(config); err != nil && err != sarama.ErrAlreadyConnected {
+			log.Printf("Error connecting to broker: %v\n", err)
+			table.SetCell(1, 0, tview.NewTableCell("error").SetAlign(tview.AlignCenter))
+		} else {
+			request := &sarama.DescribeConfigsRequest{
+				Resources: []*sarama.ConfigResource{
+					{
+						Type: sarama.TopicResource,
+						Name: topic,
+					},
+				},
+			}
+			response, err := broker.DescribeConfigs(request)
+			if err != nil {
+				log.Printf("Error describing configs: %v\n", err)
+				table.SetCell(1, 0, tview.NewTableCell("error").SetAlign(tview.AlignCenter))
+			} else {
+				row := 1
+				for _, resource := range response.Resources {
+					for _, entry := range resource.Configs {
+						table.SetCell(row, 0, tview.NewTableCell(entry.Name).SetAlign(tview.AlignLeft)).
+							SetCell(row, 1, tview.NewTableCell(entry.Value).SetAlign(tview.AlignLeft))
+						row++
+					}
+				}
+			}
+		}
+	}
+
+	// Create a flex container to hold the table and search input
+	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex.AddItem(table, 0, 1, true)
+
+	// Create an input field for search
+	searchInput := tview.NewInputField().
+		SetLabel("Search: ").
+		SetFieldBackgroundColor(tview.Styles.PrimitiveBackgroundColor)
+
+	searchInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			query := strings.ToLower(searchInput.GetText())
+			filterTable(table, query)
+			flex.RemoveItem(searchInput)
+			app.SetFocus(table)
+		}
+	})
+
+	// Set up key event handling
+	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == '/' {
+			flex.AddItem(searchInput, 1, 0, true)
+			app.SetFocus(searchInput)
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'q' {
+			displayTopics(app, brokerAddress)
+			return nil
+		}
+		return event
+	})
+
+	// Display the flex layout containing the table and input field
+	if err := app.SetRoot(flex, true).Run(); err != nil {
+		panic(err)
+	}
+}
+
+func filterTable(table *tview.Table, query string) {
+	for row := 1; row < table.GetRowCount(); row++ {
+		nameCell := table.GetCell(row, 0)
+		valueCell := table.GetCell(row, 1)
+		if strings.Contains(strings.ToLower(nameCell.Text), query) || strings.Contains(strings.ToLower(valueCell.Text), query) {
+			nameCell.SetTextColor(tcell.ColorWhite)
+			valueCell.SetTextColor(tcell.ColorWhite)
+		} else {
+			nameCell.SetTextColor(tcell.ColorGray)
+			valueCell.SetTextColor(tcell.ColorGray)
+		}
 	}
 }
